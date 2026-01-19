@@ -424,4 +424,4 @@ MIT
 
 ---
 
-Built for Kora operators. Tested on devnet, use on mainnet at your own risk.
+Tested on devnet, use on mainnet at your own risk.
