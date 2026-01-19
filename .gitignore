@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Database
+database/
+*.db
+
+# Logs
+logs/
+
+# Environment (contains secrets)
+.env
+
+# Wallet/Keys (NEVER commit!)
+wallet/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!whitelist.json
+
+# Operator keys specifically
+devnet-operator.json
+*-operator.json
+
+# Test data
+test-accounts.json
+
+# Documentation files not needed for submission
+docs.txt
+UNDERSTANDING_KORA.md
+UNDERSTANDING_KORA.pdf
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
