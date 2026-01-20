@@ -107,35 +107,35 @@ This bot automates the whole process:
                     (from import/discover)
                            |
                            v
-                    +-------------+
-                    |   Scanner   |
-                    | - Fetches account state from RPC
-                    | - Checks if closed/empty/inactive
-                    +-------------+
+                    +----------------------------------+
+                    |   Scanner   |                    |
+                    | - Fetches account state from RPC |
+                    | - Checks if closed/empty/inactive|
+                    +----------------------------------+
                            |
                            v
-                    +-------------+
-                    |   Safety    |
-                    | - Whitelist check
-                    | - Idle time check  
-                    | - Budget limits
-                    +-------------+
+                    +--------------------+
+                    |   Safety           |
+                    | - Whitelist check  |
+                    | - Idle time check  |
+                    | - Budget limits    |
+                    +--------------------+
                            |
                            v
-                    +-------------+
-                    |   Reclaim   |
-                    | - Creates close instructions
-                    | - Batches into transactions
-                    | - Sends with retry logic
-                    +-------------+
+                    +----------------------------------+
+                    |   Reclaim                        |
+                    | - Creates close instructions     |
+                    | - Batches into transactions      |
+                    | - Sends with retry logic         |
+                    +----------------------------------+
                            |
                            v
-                    +-------------+
-                    |   Logger    |
-                    | - JSON logs
-                    | - Console output
-                    | - Telegram alerts
-                    +-------------+
+                    +--------------------+
+                    |   Logger           |
+                    | - JSON logs        |
+                    | - Console output   |
+                    | - Telegram alerts  |
+                    +--------------------+
                            |
                            v
                       Treasury $
