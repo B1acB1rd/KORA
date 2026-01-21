@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
-import { Keypair, Connection, clusterApiUrl, Cluster } from '@solana/web3.js';
+import { Keypair, Connection, clusterApiUrl, Cluster, PublicKey } from '@solana/web3.js';
 
 dotenv.config();
 
@@ -153,6 +153,13 @@ class ConfigManager {
 
         if (!this.config.treasuryAddress) {
             errors.push('TREASURY_ADDRESS is required');
+        } else {
+            // validate treasury address format
+            try {
+                new PublicKey(this.config.treasuryAddress);
+            } catch {
+                errors.push('TREASURY_ADDRESS is not a valid Solana public key');
+            }
         }
 
         // mainnet needs treasury for sure

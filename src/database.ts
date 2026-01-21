@@ -12,6 +12,9 @@ export interface SponsoredAccount {
     createdAt: string;
     lastChecked: string | null;
     status: 'active' | 'closed' | 'reclaimed' | 'skipped';
+    reclaimableSince: string | null;
+    closeAuthority: string | null;
+    operatorCanClose: boolean;
 }
 
 export interface ReclaimHistoryEntry {
@@ -78,9 +81,15 @@ class DatabaseManager {
         lamports INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_checked DATETIME,
-        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'closed', 'reclaimed', 'skipped'))
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'closed', 'reclaimed', 'skipped')),
+        reclaimable_since DATETIME,
+        close_authority TEXT,
+        operator_can_close INTEGER DEFAULT 0
       )
     `);
+
+        // run migrations for existing databases
+        this.runMigrations(db);
 
         // history table
         db.run(`
@@ -114,6 +123,29 @@ class DatabaseManager {
         this.save();
     }
 
+    // run schema migrations for existing databases
+    private runMigrations(db: SqlJsDatabase) {
+        // check if new columns exist, add them if not
+        try {
+            var tableInfo = db.exec("PRAGMA table_info(sponsored_accounts)");
+            if (tableInfo.length > 0) {
+                var columns = tableInfo[0].values.map(row => row[1] as string);
+
+                if (!columns.includes('reclaimable_since')) {
+                    db.run("ALTER TABLE sponsored_accounts ADD COLUMN reclaimable_since DATETIME");
+                }
+                if (!columns.includes('close_authority')) {
+                    db.run("ALTER TABLE sponsored_accounts ADD COLUMN close_authority TEXT");
+                }
+                if (!columns.includes('operator_can_close')) {
+                    db.run("ALTER TABLE sponsored_accounts ADD COLUMN operator_can_close INTEGER DEFAULT 0");
+                }
+            }
+        } catch (err) {
+            // table might not exist yet, thats ok
+        }
+    }
+
     private save() {
         if (this.db) {
             var data = this.db.export();
@@ -127,8 +159,8 @@ class DatabaseManager {
         var db = await this.getDb();
         db.run(`
       INSERT OR REPLACE INTO sponsored_accounts 
-      (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status, reclaimable_since, close_authority, operator_can_close)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
             account.pubkey,
             account.programOwner,
@@ -136,7 +168,10 @@ class DatabaseManager {
             account.lamports,
             account.createdAt,
             account.lastChecked,
-            account.status
+            account.status,
+            account.reclaimableSince,
+            account.closeAuthority,
+            account.operatorCanClose ? 1 : 0
         ]);
         this.save();
     }
@@ -148,8 +183,8 @@ class DatabaseManager {
         for (var account of accounts) {
             db.run(`
         INSERT OR REPLACE INTO sponsored_accounts 
-        (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status, reclaimable_since, close_authority, operator_can_close)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
                 account.pubkey,
                 account.programOwner,
@@ -157,15 +192,25 @@ class DatabaseManager {
                 account.lamports,
                 account.createdAt,
                 account.lastChecked,
-                account.status
+                account.status,
+                account.reclaimableSince,
+                account.closeAuthority,
+                account.operatorCanClose ? 1 : 0
             ]);
         }
         this.save();
     }
 
+    // helper to safely escape strings for sql.js queries
+    // sql.js exec() doesn't support parameterized queries, so we escape manually
+    private escapeString(str: string): string {
+        return str.replace(/'/g, "''");
+    }
+
     async getAccount(pubkey: string): Promise<SponsoredAccount | null> {
         var db = await this.getDb();
-        var result = db.exec('SELECT * FROM sponsored_accounts WHERE pubkey = ?', [pubkey]);
+        var escapedPubkey = this.escapeString(pubkey);
+        var result = db.exec(`SELECT * FROM sponsored_accounts WHERE pubkey = '${escapedPubkey}'`);
         if (result.length === 0 || result[0].values.length === 0) {
             return null;
         }
@@ -204,6 +249,40 @@ class DatabaseManager {
         this.save();
     }
 
+    // update authority info for an account
+    async updateAccountAuthority(pubkey: string, closeAuthority: string | null, operatorCanClose: boolean) {
+        var db = await this.getDb();
+        db.run(`
+      UPDATE sponsored_accounts 
+      SET close_authority = ?, operator_can_close = ?
+      WHERE pubkey = ?
+    `, [closeAuthority, operatorCanClose ? 1 : 0, pubkey]);
+        this.save();
+    }
+
+    // mark account as reclaimable (first time it becomes empty/closeable)
+    async markAsReclaimable(pubkey: string) {
+        var db = await this.getDb();
+        // only set reclaimable_since if its not already set
+        db.run(`
+      UPDATE sponsored_accounts 
+      SET reclaimable_since = datetime('now')
+      WHERE pubkey = ? AND reclaimable_since IS NULL
+    `, [pubkey]);
+        this.save();
+    }
+
+    // clear reclaimable state (account became active again)
+    async clearReclaimableState(pubkey: string) {
+        var db = await this.getDb();
+        db.run(`
+      UPDATE sponsored_accounts 
+      SET reclaimable_since = NULL
+      WHERE pubkey = ?
+    `, [pubkey]);
+        this.save();
+    }
+
     async getAccountCount(): Promise<{ total: number; active: number; closed: number; reclaimed: number }> {
         var db = await this.getDb();
 
@@ -234,6 +313,9 @@ class DatabaseManager {
             createdAt: obj.created_at as string,
             lastChecked: obj.last_checked as string | null,
             status: obj.status as SponsoredAccount['status'],
+            reclaimableSince: obj.reclaimable_since as string | null,
+            closeAuthority: obj.close_authority as string | null,
+            operatorCanClose: Boolean(obj.operator_can_close),
         };
     }
 
@@ -289,7 +371,8 @@ class DatabaseManager {
 
     async isWhitelisted(pubkey: string): Promise<boolean> {
         var db = await this.getDb();
-        var result = db.exec('SELECT 1 FROM whitelist WHERE pubkey = ?', [pubkey]);
+        var escapedPubkey = this.escapeString(pubkey);
+        var result = db.exec(`SELECT 1 FROM whitelist WHERE pubkey = '${escapedPubkey}'`);
         return result.length > 0 && result[0].values.length > 0;
     }
 

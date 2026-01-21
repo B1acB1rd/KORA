@@ -1,5 +1,5 @@
-import { PublicKey, AccountInfo, SystemProgram } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { PublicKey, AccountInfo, SystemProgram, Keypair } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, AccountLayout } from '@solana/spl-token';
 import { config, configManager } from './config';
 import { database, SponsoredAccount } from './database';
 import { logger } from './logger';
@@ -14,6 +14,8 @@ export interface AccountStatus {
     isTokenAccount: boolean;
     isReclaimable: boolean;
     skipReason?: string;
+    closeAuthority?: string | null;
+    operatorCanClose: boolean;
 }
 
 export interface ScanResult {
@@ -115,6 +117,7 @@ class Scanner {
                         isTokenAccount: false,
                         isReclaimable: false,
                         skipReason: 'Failed to fetch account info',
+                        operatorCanClose: false,
                     });
                 }
             }
@@ -141,12 +144,22 @@ class Scanner {
                 isTokenAccount: false,
                 isReclaimable: false,
                 skipReason: 'Failed to fetch account info',
+                operatorCanClose: false,
             };
         }
     }
 
     // figure out if account can be reclaimed
     private async analyzeAccount(pubkey: string, info: AccountInfo<Buffer> | null): Promise<AccountStatus> {
+        // get operator public key for authority comparison
+        var operatorPubkey: PublicKey | null = null;
+        try {
+            var keypair = configManager.loadOperatorKeypair();
+            operatorPubkey = keypair.publicKey;
+        } catch {
+            logger.debug('Could not load operator keypair for authority check');
+        }
+
         var status: AccountStatus = {
             pubkey,
             exists: info !== null,
@@ -156,12 +169,16 @@ class Scanner {
             executable: info?.executable || false,
             isTokenAccount: false,
             isReclaimable: false,
+            operatorCanClose: false,
+            closeAuthority: null,
         };
 
-        // already closed? skip
+        // already closed? track for accounting but cant reclaim
         if (!info) {
             status.isReclaimable = false;
             status.skipReason = 'Account already closed';
+            // mark as closed in db and track this for accounting
+            await database.updateAccountStatus(pubkey, 'closed', 0);
             return status;
         }
 
@@ -175,20 +192,49 @@ class Scanner {
             return status;
         }
 
-        // check if reclaimable based on owner
+        // check if reclaimable based on owner and AUTHORITY
         if (info.owner.equals(SystemProgram.programId)) {
-            // system account - can close if no data
-            if (info.data.length === 0) {
-                status.isReclaimable = true;
-            } else {
-                status.skipReason = 'System account with data';
-            }
+            // system account - operator CANNOT close these
+            // they require the account's private key, not just fee payer
+            status.isReclaimable = false;
+            status.operatorCanClose = false;
+            status.skipReason = 'System account - operator cannot close (requires account private key)';
         } else if (status.isTokenAccount) {
-            // token accts can be closed (we check balance later)
-            status.isReclaimable = true;
+            // token accounts - need to check closeAuthority
+            try {
+                // decode the token account to get closeAuthority
+                var decoded = AccountLayout.decode(info.data);
+                var closeAuthority = decoded.closeAuthorityOption === 1
+                    ? new PublicKey(decoded.closeAuthority).toBase58()
+                    : new PublicKey(decoded.owner).toBase58(); // default to owner if no closeAuthority set
+
+                status.closeAuthority = closeAuthority;
+
+                // check if operator is the close authority
+                if (operatorPubkey && closeAuthority === operatorPubkey.toBase58()) {
+                    status.operatorCanClose = true;
+                    status.isReclaimable = true;
+                    // mark as reclaimable if first time
+                    await database.markAsReclaimable(pubkey);
+                } else {
+                    status.operatorCanClose = false;
+                    status.isReclaimable = false;
+                    status.skipReason = `Operator is not close authority (authority: ${closeAuthority.slice(0, 8)}...)`;
+                    // clear reclaimable state since we cant close it
+                    await database.clearReclaimableState(pubkey);
+                }
+
+                // update authority info in db
+                await database.updateAccountAuthority(pubkey, closeAuthority, status.operatorCanClose);
+
+            } catch (err) {
+                status.skipReason = 'Failed to decode token account';
+                status.operatorCanClose = false;
+            }
         } else {
             // other program owned - needs manual review
             status.skipReason = 'Program-owned account (manual review needed)';
+            status.operatorCanClose = false;
         }
 
         return status;

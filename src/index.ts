@@ -46,7 +46,7 @@ program
 
         // filter out accounts that dont pass safety
         const { safe, filtered } = await safety.filterSafeAccounts(result.reclaimable);
-
+ 
         logger.info(`Found ${safe.length} accounts eligible for reclaim`);
 
         if (filtered.length > 0) {

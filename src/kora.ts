@@ -66,6 +66,9 @@ class KoraParser {
                 createdAt: item.createdAt || now,
                 lastChecked: null,
                 status: 'active',
+                reclaimableSince: null,
+                closeAuthority: null,
+                operatorCanClose: false, // will be determined during scan
             });
         }
 
@@ -110,6 +113,9 @@ class KoraParser {
                     createdAt: now,
                     lastChecked: null,
                     status: 'active',
+                    reclaimableSince: null,
+                    closeAuthority: null,
+                    operatorCanClose: false,
                 });
             }
         }
@@ -183,6 +189,9 @@ class KoraParser {
                                     : new Date().toISOString(),
                                 lastChecked: null,
                                 status: 'active',
+                                reclaimableSince: null,
+                                closeAuthority: null,
+                                operatorCanClose: false,
                             });
                         }
                     }
@@ -233,6 +242,9 @@ class KoraParser {
             createdAt: new Date().toISOString(),
             lastChecked: null,
             status: 'active',
+            reclaimableSince: null,
+            closeAuthority: null,
+            operatorCanClose: false,
         });
 
         logger.success(`Added account: ${pubkey}`);

@@ -69,29 +69,43 @@ Most operators dont track this. They see SOL leaving their wallet for fees but d
 
 ### How Rent Reclaim Works on Solana
 
-Solana accounts can be closed and rent recovered when:
+**Important: Fee Payer vs Authority**
 
-1. **Token Accounts (SPL)** - If the token balance is 0, the account can be closed using the `closeAccount` instruction. Rent goes to a destination you specify.
+Paying for an account's creation (as fee payer) does NOT automatically give you the right to close it. On Solana, only the account's **authority** can close it:
 
-2. **System Accounts** - If the account has no data (just holds SOL), you can transfer out the lamports which effectively closes it.
+- **Token Accounts (SPL)** - The `closeAuthority` (defaults to the account owner) must sign. If you're the fee payer but not the authority, you CANNOT close it.
+- **System Accounts** - The account's private key is required. Fee payers cannot close user system accounts.
+- **Program-Owned Accounts** - The owning program controls close logic. May require operator authority.
 
-3. **Program-Owned Accounts** - Depends on the program. Some programs have close instructions, some dont. We skip these and flag them for manual review.
+**What This Means for Kora Operators:**
 
-The key insight: as a Kora operator, you sponsored the creation of these accounts. In many cases (especially ATAs), you have the authority to close them and recover the rent.
+| Account Type | Who Can Close | Can Operator Reclaim? |
+|--------------|--------------|----------------------|
+| User's ATA (token account) | User wallet | NO - user is authority |
+| Operator-owned ATA | Operator | YES - if operator is closeAuthority |
+| User's System Account | User | NO - requires user's private key |
+| Already Closed Account | N/A | TRACKING ONLY - rent already returned |
+| Custom Program PDA | Depends on program | MAYBE - if program grants authority |
+
+This bot automatically detects which accounts the operator has authority over and only attempts to close those.
 
 ---
 
 ## What This Bot Does
 
-This bot automates the whole process:
+This bot automatically manages rent recovery for Kora-sponsored accounts:
 
 1. **Tracks sponsored accounts** - Import from files, discover from fee payer transactions, or parse Kora logs
-2. **Scans for reclaimable accounts** - Checks which accounts are closed, empty, or inactive
-3. **Safely reclaims rent** - Closes eligible accounts and sends rent to your treasury
-4. **Logs everything** - Full audit trail of what was reclaimed and why
+2. **Detects authority** - Checks each token account's `closeAuthority` to verify operator permissions
+3. **Scans for reclaimable accounts** - Identifies accounts that are closed, empty, AND where operator has authority
+4. **Safely reclaims rent** - Only closes accounts the operator is authorized to close
+5. **Logs everything** - Full audit trail with authority status for each account
+
+**Note:** The bot will skip accounts where the operator is not the authority. This is by design - on Solana, you cannot close accounts you dont own.
 
 ### Core Features
 
+- **Authority verification** - Automatically detects if operator can close each account
 - **Batch scanning** - Uses `getMultipleAccounts` RPC call for efficiency
 - **Safety checks** - Whitelist, idle time requirements, max reclaim limits
 - **Telegram alerts** - Get notified when reclaims happen
@@ -361,23 +375,18 @@ node dist/index.js status
 
 ### How We Reclaim
 
-**Token Accounts (SPL)**
+**Token Accounts (SPL)** - Only if operator is the closeAuthority
 ```
 closeAccount(
   account,      // the ATA to close
   destination,  // where rent goes (treasury)
-  authority     // who can close (operator)
+  authority     // who can close (must be operator)
 )
 ```
 
-**System Accounts**
-```
-transfer(
-  from,         // the account
-  to,           // treasury  
-  lamports      // all of it
-)
-```
+**System Accounts** - SKIPPED
+
+System accounts require the account's private key to close. The operator (fee payer) cannot close user system accounts. These are logged and skipped.
 
 **Program Accounts**
 

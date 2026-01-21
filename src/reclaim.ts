@@ -226,7 +226,14 @@ class ReclaimEngine {
     }
 
     // create the close instruction
+    // CRITICAL: Only create instructions for accounts where operator has authority
     private async createCloseInstruction(account: AccountStatus, authority: PublicKey, destination: PublicKey): Promise<TransactionInstruction | null> {
+        // CRITICAL: Verify operator authority before attempting close
+        if (!account.operatorCanClose) {
+            logger.warn(`Skipping ${account.pubkey}: Operator is not the close authority`);
+            return null;
+        }
+
         var accountPubkey = new PublicKey(account.pubkey);
 
         if (account.isTokenAccount) {
@@ -237,6 +244,7 @@ class ReclaimEngine {
                     logger.warn(`Token account ${account.pubkey} has non-zero balance, skipping`);
                     return null;
                 }
+                // use the actual close authority (which we verified is the operator)
                 return createCloseAccountInstruction(accountPubkey, destination, authority);
             } catch (err) {
                 if (err instanceof TokenAccountNotFoundError) {
@@ -246,12 +254,10 @@ class ReclaimEngine {
                 throw err;
             }
         } else if (account.owner === SystemProgram.programId.toBase58()) {
-            // system account - just transfer
-            return SystemProgram.transfer({
-                fromPubkey: accountPubkey,
-                toPubkey: destination,
-                lamports: account.lamports,
-            });
+            // System accounts CANNOT be closed by fee payer
+            // They require the actual account's private key to sign
+            logger.debug(`System account ${account.pubkey}: Operator cannot close (requires account private key)`);
+            return null;
         }
 
         return null;
@@ -309,6 +315,7 @@ class ReclaimEngine {
             executable: false,
             isTokenAccount: false,
             isReclaimable: true,
+            operatorCanClose: true, // assume caller verified this
         }]);
 
         if (result.successful.length > 0) return result.successful[0];

@@ -33,6 +33,11 @@ class SafetyManager {
 
     // main check function
     async checkAccount(account: AccountStatus): Promise<SafetyCheckResult> {
+        // CRITICAL: Must check authority first
+        if (!account.operatorCanClose) {
+            return { allowed: false, reason: 'Operator is not the close authority' };
+        }
+
         // whitelisted = dont touch
         if (await this.isWhitelisted(account.pubkey)) {
             return { allowed: false, reason: 'Account is whitelisted' };
@@ -59,19 +64,27 @@ class SafetyManager {
         return { allowed: true };
     }
 
-    // check idle time
+    // check idle time - uses reclaimable_since, not last_checked
+    // this ensures the timer doesnt reset on every scan
     private async checkIdleDuration(pubkey: string): Promise<SafetyCheckResult> {
         var account = await database.getAccount(pubkey);
         if (!account) return { allowed: true }; // no history = ok
-        if (!account.lastChecked) return { allowed: true }; // never checked = ok
 
-        var lastChecked = new Date(account.lastChecked);
-        var daysSinceCheck = (Date.now() - lastChecked.getTime()) / (1000 * 60 * 60 * 24);
-
-        if (daysSinceCheck < this.config.minIdleDays) {
+        // if reclaimableSince is not set, account hasnt been in reclaimable state yet
+        if (!account.reclaimableSince) {
             return {
                 allowed: false,
-                reason: `Account checked ${daysSinceCheck.toFixed(1)} days ago (min: ${this.config.minIdleDays})`
+                reason: 'Account not yet in idle/reclaimable state'
+            };
+        }
+
+        var reclaimableSince = new Date(account.reclaimableSince);
+        var daysReclaimable = (Date.now() - reclaimableSince.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (daysReclaimable < this.config.minIdleDays) {
+            return {
+                allowed: false,
+                reason: `Account reclaimable for ${daysReclaimable.toFixed(1)} days (min: ${this.config.minIdleDays})`
             };
         }
 
