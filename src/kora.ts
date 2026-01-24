@@ -22,14 +22,14 @@ export interface ImportedAccount {
 class KoraParser {
     // import from json file
     async importFromFile(filePath: string): Promise<number> {
-        var absolutePath = path.resolve(filePath);
+        const absolutePath = path.resolve(filePath);
 
         if (!fs.existsSync(absolutePath)) {
             throw new Error(`File not found: ${absolutePath}`);
         }
 
-        var content = fs.readFileSync(absolutePath, 'utf-8');
-        var data: ImportedAccount[];
+        const content = fs.readFileSync(absolutePath, 'utf-8');
+        let data: ImportedAccount[];
 
         try {
             data = JSON.parse(content);
@@ -41,10 +41,10 @@ class KoraParser {
             throw new Error('JSON file must contain an array of accounts');
         }
 
-        var accounts: Omit<SponsoredAccount, 'id'>[] = [];
-        var now = new Date().toISOString();
+        const accounts: Omit<SponsoredAccount, 'id'>[] = [];
+        const now = new Date().toISOString();
 
-        for (var item of data) {
+        for (const item of data) {
             if (!item.pubkey) {
                 logger.warn('Skipping entry without pubkey');
                 continue;
@@ -89,21 +89,21 @@ class KoraParser {
             throw new Error(`Log file not found: ${logPath}`);
         }
 
-        var content = fs.readFileSync(logPath, 'utf-8');
-        var lines = content.split('\n');
-        var accounts: Omit<SponsoredAccount, 'id'>[] = [];
-        var now = new Date().toISOString();
+        const content = fs.readFileSync(logPath, 'utf-8');
+        const lines = content.split('\n');
+        const accounts: Omit<SponsoredAccount, 'id'>[] = [];
+        const now = new Date().toISOString();
 
         // patterns for finding sponsored accounts
         // might need to adjust these based on actual logs
-        var sponsorPattern = /sponsored.*account.*([1-9A-HJ-NP-Za-km-z]{32,44})/i;
-        var sigPattern = /signature[:\s]+([1-9A-HJ-NP-Za-km-z]{87,88})/i;
+        const sponsorPattern = /sponsored.*account.*([1-9A-HJ-NP-Za-km-z]{32,44})/i;
+        const sigPattern = /signature[:\s]+([1-9A-HJ-NP-Za-km-z]{87,88})/i;
 
-        for (var line of lines) {
-            var accountMatch = line.match(sponsorPattern);
+        for (const line of lines) {
+            const accountMatch = line.match(sponsorPattern);
             if (accountMatch) {
-                var pubkey = accountMatch[1];
-                var sigMatch = line.match(sigPattern);
+                const pubkey = accountMatch[1];
+                const sigMatch = line.match(sigPattern);
 
                 accounts.push({
                     pubkey,
@@ -132,8 +132,8 @@ class KoraParser {
     async discoverFromFeePayer(feePayerAddress: string, limit = 1000): Promise<number> {
         logger.info(`Discovering accounts from fee payer: ${feePayerAddress}`);
 
-        var feePayer = new PublicKey(feePayerAddress);
-        var signatures: ConfirmedSignatureInfo[] = [];
+        const feePayer = new PublicKey(feePayerAddress);
+        let signatures: ConfirmedSignatureInfo[] = [];
 
         try {
             signatures = await config.connection.getSignaturesForAddress(feePayer, { limit });
@@ -143,21 +143,21 @@ class KoraParser {
 
         logger.info(`Found ${signatures.length} transactions to analyze`);
 
-        var discoveredAccounts = new Set<string>();
-        var accounts: Omit<SponsoredAccount, 'id'>[] = [];
+        const discoveredAccounts = new Set<string>();
+        const accounts: Omit<SponsoredAccount, 'id'>[] = [];
 
-        for (var sig of signatures) {
+        for (const sig of signatures) {
             try {
-                var tx = await config.connection.getTransaction(sig.signature, {
+                const tx = await config.connection.getTransaction(sig.signature, {
                     maxSupportedTransactionVersion: 0,
                 });
 
                 if (!tx?.meta?.postBalances || !tx?.transaction?.message) continue;
 
-                var message = tx.transaction.message;
+                const message = tx.transaction.message;
 
                 // handle both legacy and v0 txs
-                var accountKeys: PublicKey[];
+                let accountKeys: PublicKey[];
                 if ('staticAccountKeys' in message) {
                     accountKeys = message.staticAccountKeys;
                 } else if ('accountKeys' in message) {
@@ -166,11 +166,11 @@ class KoraParser {
                     continue;
                 }
 
-                var preBalances = tx.meta.preBalances;
-                var postBalances = tx.meta.postBalances;
+                const preBalances = tx.meta.preBalances;
+                const postBalances = tx.meta.postBalances;
 
                 for (let i = 0; i < accountKeys.length; i++) {
-                    var pubkey = accountKeys[i].toBase58();
+                    const pubkey = accountKeys[i].toBase58();
 
                     // skip fee payer
                     if (pubkey === feePayerAddress) continue;
@@ -211,8 +211,8 @@ class KoraParser {
 
     // export to json
     async exportAccounts(outputPath: string) {
-        var accounts = await database.getAllAccounts();
-        var exportData = accounts.map(a => ({
+        const accounts = await database.getAllAccounts();
+        const exportData = accounts.map(a => ({
             pubkey: a.pubkey,
             programOwner: a.programOwner,
             sponsorSignature: a.sponsorSignature,
@@ -252,9 +252,9 @@ class KoraParser {
 
     // stats
     async getStats(): Promise<{ total: number; active: number; closed: number; reclaimed: number; totalLamports: number }> {
-        var counts = await database.getAccountCount();
-        var accounts = await database.getAllAccounts();
-        var totalLamports = accounts.reduce((sum, a) => sum + a.lamports, 0);
+        const counts = await database.getAccountCount();
+        const accounts = await database.getAllAccounts();
+        const totalLamports = accounts.reduce((sum, a) => sum + a.lamports, 0);
 
         return { ...counts, totalLamports };
     }

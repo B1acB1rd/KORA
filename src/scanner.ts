@@ -36,10 +36,10 @@ class Scanner {
 
     // main scan function - goes thru all accounts
     async scanAccounts(): Promise<ScanResult> {
-        var accounts = await database.getActiveAccounts();
+        const accounts = await database.getActiveAccounts();
         logger.info(`Scanning ${accounts.length} tracked accounts...`);
 
-        var result: ScanResult = {
+        const result: ScanResult = {
             total: accounts.length,
             reclaimable: [],
             skipped: [],
@@ -48,15 +48,15 @@ class Scanner {
 
         // batch processing with getMultipleAccounts
         for (let i = 0; i < accounts.length; i += this.batchSize) {
-            var batch = accounts.slice(i, Math.min(i + this.batchSize, accounts.length));
-            var batchNum = Math.floor(i / this.batchSize) + 1;
-            var totalBatches = Math.ceil(accounts.length / this.batchSize);
+            const batch = accounts.slice(i, Math.min(i + this.batchSize, accounts.length));
+            const batchNum = Math.floor(i / this.batchSize) + 1;
+            const totalBatches = Math.ceil(accounts.length / this.batchSize);
             logger.debug(`Processing batch ${batchNum}/${totalBatches}`);
 
             try {
-                var batchResults = await this.scanBatch(batch);
+                const batchResults = await this.scanBatch(batch);
 
-                for (var status of batchResults) {
+                for (const status of batchResults) {
                     if (status.isReclaimable) {
                         result.reclaimable.push(status);
                     } else {
@@ -64,7 +64,7 @@ class Scanner {
                     }
                 }
             } catch (error) {
-                var errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
                 result.errors.push(`Batch error: ${errorMsg}`);
                 logger.error(`Batch scan error: ${errorMsg}`);
             }
@@ -79,16 +79,16 @@ class Scanner {
 
     // scan batch using getMultipleAccounts for efficiency
     private async scanBatch(accounts: SponsoredAccount[]): Promise<AccountStatus[]> {
-        var pubkeys = accounts.map(a => new PublicKey(a.pubkey));
-        var statuses: AccountStatus[] = [];
+        const pubkeys = accounts.map(a => new PublicKey(a.pubkey));
+        const statuses: AccountStatus[] = [];
 
         try {
-            var accountInfos = await config.connection.getMultipleAccountsInfo(pubkeys);
+            const accountInfos = await config.connection.getMultipleAccountsInfo(pubkeys);
 
             for (let i = 0; i < accounts.length; i++) {
-                var account = accounts[i];
-                var info = accountInfos[i];
-                var status = await this.analyzeAccount(account.pubkey, info);
+                const account = accounts[i];
+                const info = accountInfos[i];
+                const status = await this.analyzeAccount(account.pubkey, info);
                 statuses.push(status);
 
                 // update db
@@ -101,9 +101,9 @@ class Scanner {
         } catch (error) {
             logger.error(`Failed to fetch batch: ${error}`);
             // fallback to single account fetches
-            for (var account of accounts) {
+            for (const account of accounts) {
                 try {
-                    var status = await this.scanSingleAccount(account.pubkey);
+                    const status = await this.scanSingleAccount(account.pubkey);
                     statuses.push(status);
                 } catch {
                     // just push a failed status
@@ -129,8 +129,8 @@ class Scanner {
     // scan single account
     async scanSingleAccount(pubkey: string): Promise<AccountStatus> {
         try {
-            var publicKey = new PublicKey(pubkey);
-            var info = await config.connection.getAccountInfo(publicKey);
+            const publicKey = new PublicKey(pubkey);
+            const info = await config.connection.getAccountInfo(publicKey);
             return await this.analyzeAccount(pubkey, info);
         } catch (error) {
             logger.error(`Failed to scan account ${pubkey}: ${error}`);
@@ -152,15 +152,15 @@ class Scanner {
     // figure out if account can be reclaimed
     private async analyzeAccount(pubkey: string, info: AccountInfo<Buffer> | null): Promise<AccountStatus> {
         // get operator public key for authority comparison
-        var operatorPubkey: PublicKey | null = null;
+        let operatorPubkey: PublicKey | null = null;
         try {
-            var keypair = configManager.loadOperatorKeypair();
+            const keypair = configManager.loadOperatorKeypair();
             operatorPubkey = keypair.publicKey;
         } catch {
             logger.debug('Could not load operator keypair for authority check');
         }
 
-        var status: AccountStatus = {
+        const status: AccountStatus = {
             pubkey,
             exists: info !== null,
             lamports: info?.lamports || 0,
@@ -186,7 +186,7 @@ class Scanner {
         status.isTokenAccount = info.owner.equals(TOKEN_PROGRAM_ID);
 
         // safety first
-        var skipReason = await this.checkSafetyRules(pubkey, info);
+        const skipReason = await this.checkSafetyRules(pubkey, info);
         if (skipReason) {
             status.skipReason = skipReason;
             return status;
@@ -203,8 +203,8 @@ class Scanner {
             // token accounts - need to check closeAuthority
             try {
                 // decode the token account to get closeAuthority
-                var decoded = AccountLayout.decode(info.data);
-                var closeAuthority = decoded.closeAuthorityOption === 1
+                const decoded = AccountLayout.decode(info.data);
+                const closeAuthority = decoded.closeAuthorityOption === 1
                     ? new PublicKey(decoded.closeAuthority).toBase58()
                     : new PublicKey(decoded.owner).toBase58(); // default to owner if no closeAuthority set
 
@@ -243,7 +243,7 @@ class Scanner {
     // check if account passes safety
     private async checkSafetyRules(pubkey: string, info: AccountInfo<Buffer>): Promise<string | null> {
         // whitelisted?
-        var isWhitelisted = await database.isWhitelisted(pubkey);
+        const isWhitelisted = await database.isWhitelisted(pubkey);
         if (isWhitelisted || configManager.isWhitelisted(pubkey)) {
             return 'Account is whitelisted';
         }
@@ -254,10 +254,10 @@ class Scanner {
         }
 
         // check idle time
-        var account = await database.getAccount(pubkey);
+        const account = await database.getAccount(pubkey);
         if (account?.lastChecked) {
-            var lastChecked = new Date(account.lastChecked);
-            var daysSinceCheck = (Date.now() - lastChecked.getTime()) / (1000 * 60 * 60 * 24);
+            const lastChecked = new Date(account.lastChecked);
+            const daysSinceCheck = (Date.now() - lastChecked.getTime()) / (1000 * 60 * 60 * 24);
             if (daysSinceCheck < config.minIdleDays) {
                 return `Account active within last ${config.minIdleDays} days`;
             }
@@ -268,8 +268,8 @@ class Scanner {
 
     // get accounts we havent checked in a while
     async getStaleAccounts(days: number = 7): Promise<SponsoredAccount[]> {
-        var accounts = await database.getActiveAccounts();
-        var staleDate = new Date();
+        const accounts = await database.getActiveAccounts();
+        const staleDate = new Date();
         staleDate.setDate(staleDate.getDate() - days);
 
         return accounts.filter(account => {

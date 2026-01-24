@@ -19,7 +19,7 @@ class SafetyManager {
     private config: SafetyConfig;
 
     constructor() {
-        var cfg = configManager.get();
+        const cfg = configManager.get();
         this.config = {
             minIdleDays: cfg.minIdleDays,
             maxReclaimSolPerRun: cfg.maxReclaimSolPerRun,
@@ -54,11 +54,11 @@ class SafetyManager {
         }
 
         // check if been idle long enough
-        var idleCheck = await this.checkIdleDuration(account.pubkey);
+        const idleCheck = await this.checkIdleDuration(account.pubkey);
         if (!idleCheck.allowed) return idleCheck;
 
         // check if we can still reclaim more
-        var limitCheck = this.checkReclaimLimit(account.lamports);
+        const limitCheck = this.checkReclaimLimit(account.lamports);
         if (!limitCheck.allowed) return limitCheck;
 
         return { allowed: true };
@@ -67,7 +67,7 @@ class SafetyManager {
     // check idle time - uses reclaimable_since, not last_checked
     // this ensures the timer doesnt reset on every scan
     private async checkIdleDuration(pubkey: string): Promise<SafetyCheckResult> {
-        var account = await database.getAccount(pubkey);
+        const account = await database.getAccount(pubkey);
         if (!account) return { allowed: true }; // no history = ok
 
         // if reclaimableSince is not set, account hasnt been in reclaimable state yet
@@ -78,8 +78,8 @@ class SafetyManager {
             };
         }
 
-        var reclaimableSince = new Date(account.reclaimableSince);
-        var daysReclaimable = (Date.now() - reclaimableSince.getTime()) / (1000 * 60 * 60 * 24);
+        const reclaimableSince = new Date(account.reclaimableSince);
+        const daysReclaimable = (Date.now() - reclaimableSince.getTime()) / (1000 * 60 * 60 * 24);
 
         if (daysReclaimable < this.config.minIdleDays) {
             return {
@@ -93,8 +93,8 @@ class SafetyManager {
 
     // check if we hit the limit
     private checkReclaimLimit(lamports: number): SafetyCheckResult {
-        var solAmount = lamports / 1e9;
-        var potentialTotal = (this.totalReclaimedThisRun / 1e9) + solAmount;
+        const solAmount = lamports / 1e9;
+        const potentialTotal = (this.totalReclaimedThisRun / 1e9) + solAmount;
 
         if (potentialTotal > this.config.maxReclaimSolPerRun) {
             return {
@@ -114,7 +114,7 @@ class SafetyManager {
 
     // check whitelist
     async isWhitelisted(pubkey: string): Promise<boolean> {
-        var dbWhitelisted = await database.isWhitelisted(pubkey);
+        const dbWhitelisted = await database.isWhitelisted(pubkey);
         return dbWhitelisted || configManager.isWhitelisted(pubkey);
     }
 
@@ -131,19 +131,19 @@ class SafetyManager {
     }
 
     async getWhitelist(): Promise<string[]> {
-        var dbWhitelist = (await database.getWhitelist()).map(e => e.pubkey);
-        var cfgWhitelist = configManager.getWhitelist();
+        const dbWhitelist = (await database.getWhitelist()).map(e => e.pubkey);
+        const cfgWhitelist = configManager.getWhitelist();
         // merge and dedupe
         return [...new Set([...dbWhitelist, ...cfgWhitelist])];
     }
 
     // filter accounts by safety rules
     async filterSafeAccounts(accounts: AccountStatus[]): Promise<{ safe: AccountStatus[]; filtered: { account: AccountStatus; reason: string }[] }> {
-        var safe: AccountStatus[] = [];
-        var filtered: { account: AccountStatus; reason: string }[] = [];
+        const safe: AccountStatus[] = [];
+        const filtered: { account: AccountStatus; reason: string }[] = [];
 
-        for (var account of accounts) {
-            var check = await this.checkAccount(account);
+        for (const account of accounts) {
+            const check = await this.checkAccount(account);
             if (check.allowed) {
                 safe.push(account);
             } else {
@@ -156,7 +156,7 @@ class SafetyManager {
 
     // how much can we still reclaim
     getRemainingBudget(): number {
-        var maxLamports = this.config.maxReclaimSolPerRun * 1e9;
+        const maxLamports = this.config.maxReclaimSolPerRun * 1e9;
         return Math.max(0, maxLamports - this.totalReclaimedThisRun);
     }
 

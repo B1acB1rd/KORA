@@ -10,6 +10,7 @@ import { safety } from './safety';
 import { reclaim } from './reclaim';
 import { kora } from './kora';
 import { alerts } from './alerts';
+import { dashboard } from './dashboard';
 
 const program = new Command();
 
@@ -22,7 +23,7 @@ program
     .option('-d, --dry-run', 'Simulate without executing transactions')
     .option('-v, --verbose', 'Enable verbose logging')
     .hook('preAction', (thisCommand) => {
-        var opts = thisCommand.opts();
+        const opts = thisCommand.opts();
         if (opts.network) {
             configManager.setNetwork(opts.network as 'devnet' | 'mainnet-beta');
         }
@@ -46,7 +47,7 @@ program
 
         // filter out accounts that dont pass safety
         const { safe, filtered } = await safety.filterSafeAccounts(result.reclaimable);
- 
+
         logger.info(`Found ${safe.length} accounts eligible for reclaim`);
 
         if (filtered.length > 0) {
@@ -61,8 +62,8 @@ program
         if (safe.length > 0) {
             console.log('\nReclaimable Accounts:');
             for (let i = 0; i < safe.length; i++) {
-                var account = safe[i];
-                var sol = (account.lamports / 1e9).toFixed(6);
+                const account = safe[i];
+                const sol = (account.lamports / 1e9).toFixed(6);
                 console.log(`  ${account.pubkey} - ${sol} SOL`);
             }
         }
@@ -94,9 +95,9 @@ program
         logger.printScanHeader();
 
         // check config first
-        var validation = configManager.validate();
+        const validation = configManager.validate();
         if (!validation.valid) {
-            for (var error of validation.errors) {
+            for (const error of validation.errors) {
                 logger.error(error);
             }
             process.exit(1);
@@ -113,9 +114,9 @@ program
 
         safety.resetRunState();
 
-        var startTime = Date.now();
+        const startTime = Date.now();
         logger.info('Scanning accounts...');
-        var scanResult = await scanner.scanAccounts();
+        const scanResult = await scanner.scanAccounts();
 
         const { safe } = await safety.filterSafeAccounts(scanResult.reclaimable);
 
@@ -126,12 +127,12 @@ program
         }
 
         logger.info(`Reclaiming ${safe.length} accounts...`);
-        var reclaimResult = await reclaim.reclaimAccounts(safe);
+        const reclaimResult = await reclaim.reclaimAccounts(safe);
 
-        var duration = Date.now() - startTime;
+        const duration = Date.now() - startTime;
 
         // build summary
-        var summary: ScanSummary = {
+        const summary: ScanSummary = {
             totalAccounts: scanResult.total,
             reclaimable: safe.length,
             reclaimed: reclaimResult.successful.length,
@@ -145,7 +146,7 @@ program
         logger.printSummary(summary);
 
         // save log
-        var jsonPath = await logger.saveJsonLog(summary);
+        const jsonPath = await logger.saveJsonLog(summary);
         logger.info(`JSON log saved to: ${jsonPath}`);
 
         // send alerts if configured
@@ -164,37 +165,16 @@ program
     .command('status')
     .description('Show current status and metrics')
     .action(async () => {
-        var stats = await kora.getStats();
-        var totalReclaimed = await database.getTotalReclaimed();
-        var history = await database.getReclaimHistory(5);
+        await dashboard.printCompactStatus();
+        database.close();
+    });
 
-        console.log('\n' + '='.repeat(50));
-        console.log('  Kora Rent Reclaimer Status');
-        console.log('='.repeat(50));
-        console.log(`  Network:           ${config.network}`);
-        console.log(`  Treasury:          ${config.treasuryAddress || 'Not set'}`);
-        console.log('='.repeat(50));
-        console.log('  Account Statistics');
-        console.log('-'.repeat(50));
-        console.log(`  Total Tracked:     ${stats.total}`);
-        console.log(`  Active:            ${stats.active}`);
-        console.log(`  Closed:            ${stats.closed}`);
-        console.log(`  Reclaimed:         ${stats.reclaimed}`);
-        console.log(`  Locked SOL:        ${(stats.totalLamports / 1e9).toFixed(4)}`);
-        console.log('='.repeat(50));
-        console.log('  Historical Reclaims');
-        console.log('-'.repeat(50));
-        console.log(`  Total Reclaimed:   ${(totalReclaimed / 1e9).toFixed(4)} SOL`);
-
-        if (history.length > 0) {
-            console.log('\n  Recent Activity:');
-            history.forEach(entry => {
-                var sol = (entry.lamportsReclaimed / 1e9).toFixed(6);
-                console.log(`    ${entry.timestamp} - ${entry.status} - ${sol} SOL`);
-            });
-        }
-        console.log('='.repeat(50) + '\n');
-
+// dashboard - detailed visualization
+program
+    .command('dashboard')
+    .description('Show detailed dashboard with charts and history')
+    .action(async () => {
+        await dashboard.printDashboard();
         database.close();
     });
 
@@ -204,7 +184,7 @@ program
     .description('Import accounts from JSON file')
     .action(async (file: string) => {
         try {
-            var count = await kora.importFromFile(file);
+            const count = await kora.importFromFile(file);
             logger.success(`Imported ${count} accounts`);
         } catch (error) {
             logger.error(`Import failed: ${error}`);
@@ -261,7 +241,7 @@ whitelist.command('remove <pubkey>').description('Remove account from whitelist'
 });
 
 whitelist.command('list').description('List all whitelisted accounts').action(async () => {
-    var list = await safety.getWhitelist();
+    const list = await safety.getWhitelist();
     console.log('\nWhitelisted Accounts:');
     if (list.length === 0) {
         console.log('  (none)');
@@ -288,11 +268,11 @@ program
             safety.resetRunState();
 
             try {
-                var scanResult = await scanner.scanAccounts();
-                var { safe } = await safety.filterSafeAccounts(scanResult.reclaimable);
+                const scanResult = await scanner.scanAccounts();
+                const { safe } = await safety.filterSafeAccounts(scanResult.reclaimable);
 
                 if (safe.length > 0) {
-                    let reclaimResult = await reclaim.reclaimAccounts(safe);
+                    const reclaimResult = await reclaim.reclaimAccounts(safe);
 
                     await alerts.sendReclaimSummary(
                         scanResult.total,
@@ -302,7 +282,7 @@ program
                     );
                 }
             } catch (error) {
-                var errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
                 logger.error(`Scheduled run failed: ${errorMsg}`);
                 await alerts.sendErrorAlert(errorMsg, 'Scheduled run');
             }
@@ -318,7 +298,7 @@ program
 
 // helper for mainnet confirmation
 async function confirmMainnetOperation(): Promise<boolean> {
-    var rl = readline.createInterface({
+    const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
     });
@@ -334,4 +314,30 @@ async function confirmMainnetOperation(): Promise<boolean> {
     });
 }
 
-program.parse();
+// Wait for key press before exiting (useful when double-clicking the exe)
+async function waitForKeyPress(): Promise<void> {
+    console.log('\nPress Enter to exit...');
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+    return new Promise((resolve) => {
+        rl.question('', () => {
+            rl.close();
+            resolve();
+        });
+    });
+}
+
+// Check if running interactively (no command provided)
+async function main() {
+    // If no arguments beyond node and script, show help and wait
+    if (process.argv.length <= 2) {
+        program.outputHelp();
+        await waitForKeyPress();
+        process.exit(0);
+    }
+    program.parse();
+}
+
+main();

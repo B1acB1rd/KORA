@@ -4,7 +4,7 @@
   "description": "Automated rent reclaim bot for Kora-sponsored Solana accounts",
   "main": "dist/index.js",
   "bin": {
-    "kora-reclaim": "./dist/index.js"
+    "kora-reclaimer": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -12,14 +12,33 @@
     "dev": "ts-node src/index.ts",
     "test": "jest",
     "test:integration": "jest --config jest.integration.config.js",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "build:binary": "npm run build && pkg . --out-path ./bin",
+    "build:windows": "npm run build && pkg . --target node18-win-x64 --output ./bin/kora-reclaimer.exe",
+    "build:linux": "npm run build && pkg . --target node18-linux-x64 --output ./bin/kora-reclaimer-linux",
+    "build:macos": "npm run build && pkg . --target node18-macos-x64 --output ./bin/kora-reclaimer-macos",
+    "build:all": "npm run build && pkg . --out-path ./bin"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": [
+      "node_modules/sql.js/dist/sql-wasm.wasm",
+      "node_modules/sql.js/dist/sql-wasm.js"
+    ],
+    "targets": [
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-macos-x64"
+    ],
+    "outputPath": "bin"
   },
   "keywords": [
     "solana",
     "kora",
     "rent",
     "reclaim",
-    "automation"
+    "automation",
+    "cli"
   ],
   "author": "",
   "license": "MIT",
@@ -45,9 +64,10 @@
     "ts-jest": "^29.1.1",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
-    "eslint": "^8.56.0"
+    "eslint": "^8.56.0",
+    "@yao-pkg/pkg": "^5.11.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   }
 }

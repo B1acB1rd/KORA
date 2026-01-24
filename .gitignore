@@ -3,12 +3,13 @@ node_modules/
 
 # Build output
 dist/
+bin/
 
-# Database
+# Database (local runtime data)
 database/
 *.db
 
-# Logs
+# Logs (runtime generated)
 logs/
 
 # Environment (contains secrets)
@@ -20,25 +21,46 @@ wallet/
 !package.json
 !package-lock.json
 !tsconfig.json
-!whitelist.json
+!whitelist.json.example
 
 # Operator keys specifically
 devnet-operator.json
 *-operator.json
+devnet-test-wallet.json
+*-test-wallet.json
 
-# Test data
+# Test data / Generated proofs
 test-accounts.json
+devnet-proof.json
 
 # Documentation files not needed for submission
 docs.txt
 UNDERSTANDING_KORA.md
 UNDERSTANDING_KORA.pdf
 kora_deepdive.md
+VIDEO_SCRIPT.md
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Node/TypeScript
+*.tsbuildinfo
+.npm/
+.cache/
+
+# Coverage
+coverage/
+
+# Temp files
+*.tmp
+*.temp
+*.log

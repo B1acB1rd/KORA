@@ -45,8 +45,29 @@ class DatabaseManager {
 
     private async getDb(): Promise<SqlJsDatabase> {
         if (!this.db) {
-            var SQL = await initSqlJs();
-            var dbDir = path.dirname(this.dbPath);
+            // Try to locate WASM file for sql.js
+            // This handles both normal Node.js execution and pkg-bundled binary
+            let wasmPath: string | undefined;
+
+            // Common locations to check for the WASM file
+            const possiblePaths = [
+                // In node_modules (normal development)
+                path.join(__dirname, '../node_modules/sql.js/dist/sql-wasm.wasm'),
+                path.join(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm'),
+                // pkg snapshot filesystem
+                path.join(path.dirname(process.execPath), 'sql-wasm.wasm'),
+            ];
+
+            for (const p of possiblePaths) {
+                if (fs.existsSync(p)) {
+                    wasmPath = p;
+                    break;
+                }
+            }
+
+            // Initialize sql.js - it will use built-in WASM if path not found
+            const SQL = await initSqlJs(wasmPath ? { locateFile: () => wasmPath! } : undefined);
+            const dbDir = path.dirname(this.dbPath);
 
             if (!fs.existsSync(dbDir)) {
                 fs.mkdirSync(dbDir, { recursive: true });
@@ -54,7 +75,7 @@ class DatabaseManager {
 
             // load or create db
             if (fs.existsSync(this.dbPath)) {
-                var buffer = fs.readFileSync(this.dbPath);
+                const buffer = fs.readFileSync(this.dbPath);
                 this.db = new SQL.Database(buffer);
             } else {
                 this.db = new SQL.Database();
@@ -69,7 +90,7 @@ class DatabaseManager {
     }
 
     private initialize() {
-        var db = this.db!;
+        const db = this.db!;
 
         // accounts table
         db.run(`
@@ -127,9 +148,9 @@ class DatabaseManager {
     private runMigrations(db: SqlJsDatabase) {
         // check if new columns exist, add them if not
         try {
-            var tableInfo = db.exec("PRAGMA table_info(sponsored_accounts)");
+            const tableInfo = db.exec("PRAGMA table_info(sponsored_accounts)");
             if (tableInfo.length > 0) {
-                var columns = tableInfo[0].values.map(row => row[1] as string);
+                const columns = tableInfo[0].values.map(row => row[1] as string);
 
                 if (!columns.includes('reclaimable_since')) {
                     db.run("ALTER TABLE sponsored_accounts ADD COLUMN reclaimable_since DATETIME");
@@ -148,15 +169,15 @@ class DatabaseManager {
 
     private save() {
         if (this.db) {
-            var data = this.db.export();
-            var buffer = Buffer.from(data);
+            const data = this.db.export();
+            const buffer = Buffer.from(data);
             fs.writeFileSync(this.dbPath, buffer);
         }
     }
 
     // add single account
     async addAccount(account: Omit<SponsoredAccount, 'id'>) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run(`
       INSERT OR REPLACE INTO sponsored_accounts 
       (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status, reclaimable_since, close_authority, operator_can_close)
@@ -178,9 +199,9 @@ class DatabaseManager {
 
     // bulk add
     async addAccountsBatch(accounts: Omit<SponsoredAccount, 'id'>[]) {
-        var db = await this.getDb();
+        const db = await this.getDb();
 
-        for (var account of accounts) {
+        for (const account of accounts) {
             db.run(`
         INSERT OR REPLACE INTO sponsored_accounts 
         (pubkey, program_owner, sponsor_signature, lamports, created_at, last_checked, status, reclaimable_since, close_authority, operator_can_close)
@@ -208,9 +229,9 @@ class DatabaseManager {
     }
 
     async getAccount(pubkey: string): Promise<SponsoredAccount | null> {
-        var db = await this.getDb();
-        var escapedPubkey = this.escapeString(pubkey);
-        var result = db.exec(`SELECT * FROM sponsored_accounts WHERE pubkey = '${escapedPubkey}'`);
+        const db = await this.getDb();
+        const escapedPubkey = this.escapeString(pubkey);
+        const result = db.exec(`SELECT * FROM sponsored_accounts WHERE pubkey = '${escapedPubkey}'`);
         if (result.length === 0 || result[0].values.length === 0) {
             return null;
         }
@@ -218,21 +239,21 @@ class DatabaseManager {
     }
 
     async getAllAccounts(): Promise<SponsoredAccount[]> {
-        var db = await this.getDb();
-        var result = db.exec('SELECT * FROM sponsored_accounts');
+        const db = await this.getDb();
+        const result = db.exec('SELECT * FROM sponsored_accounts');
         if (result.length === 0) return [];
         return result[0].values.map(row => this.mapToSponsoredAccount(result[0].columns, row));
     }
 
     async getActiveAccounts(): Promise<SponsoredAccount[]> {
-        var db = await this.getDb();
-        var result = db.exec("SELECT * FROM sponsored_accounts WHERE status = 'active'");
+        const db = await this.getDb();
+        const result = db.exec("SELECT * FROM sponsored_accounts WHERE status = 'active'");
         if (result.length === 0) return [];
         return result[0].values.map(row => this.mapToSponsoredAccount(result[0].columns, row));
     }
 
     async updateAccountStatus(pubkey: string, status: SponsoredAccount['status'], lamports?: number) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         if (lamports !== undefined) {
             db.run(`
         UPDATE sponsored_accounts 
@@ -251,7 +272,7 @@ class DatabaseManager {
 
     // update authority info for an account
     async updateAccountAuthority(pubkey: string, closeAuthority: string | null, operatorCanClose: boolean) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run(`
       UPDATE sponsored_accounts 
       SET close_authority = ?, operator_can_close = ?
@@ -262,7 +283,7 @@ class DatabaseManager {
 
     // mark account as reclaimable (first time it becomes empty/closeable)
     async markAsReclaimable(pubkey: string) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         // only set reclaimable_since if its not already set
         db.run(`
       UPDATE sponsored_accounts 
@@ -274,7 +295,7 @@ class DatabaseManager {
 
     // clear reclaimable state (account became active again)
     async clearReclaimableState(pubkey: string) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run(`
       UPDATE sponsored_accounts 
       SET reclaimable_since = NULL
@@ -284,10 +305,10 @@ class DatabaseManager {
     }
 
     async getAccountCount(): Promise<{ total: number; active: number; closed: number; reclaimed: number }> {
-        var db = await this.getDb();
+        const db = await this.getDb();
 
         function getCount(query: string): number {
-            var result = db.exec(query);
+            const result = db.exec(query);
             if (result.length === 0 || result[0].values.length === 0) return 0;
             return Number(result[0].values[0][0]) || 0;
         }
@@ -301,7 +322,7 @@ class DatabaseManager {
     }
 
     private mapToSponsoredAccount(columns: string[], row: unknown[]): SponsoredAccount {
-        var obj: Record<string, unknown> = {};
+        const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => { obj[col] = row[i]; });
 
         return {
@@ -321,7 +342,7 @@ class DatabaseManager {
 
     // history stuff
     async addReclaimHistory(entry: Omit<ReclaimHistoryEntry, 'id' | 'timestamp'>) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run(`
       INSERT INTO reclaim_history (pubkey, lamports_reclaimed, status, reason, tx_signature)
       VALUES (?, ?, ?, ?, ?)
@@ -330,12 +351,12 @@ class DatabaseManager {
     }
 
     async getReclaimHistory(limit = 100): Promise<ReclaimHistoryEntry[]> {
-        var db = await this.getDb();
-        var result = db.exec(`SELECT * FROM reclaim_history ORDER BY timestamp DESC LIMIT ${limit}`);
+        const db = await this.getDb();
+        const result = db.exec(`SELECT * FROM reclaim_history ORDER BY timestamp DESC LIMIT ${limit}`);
         if (result.length === 0) return [];
 
         return result[0].values.map(row => {
-            var obj: Record<string, unknown> = {};
+            const obj: Record<string, unknown> = {};
             result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
             return {
                 id: obj.id as number,
@@ -350,39 +371,39 @@ class DatabaseManager {
     }
 
     async getTotalReclaimed(): Promise<number> {
-        var db = await this.getDb();
-        var result = db.exec("SELECT SUM(lamports_reclaimed) as total FROM reclaim_history WHERE status = 'success'");
+        const db = await this.getDb();
+        const result = db.exec("SELECT SUM(lamports_reclaimed) as total FROM reclaim_history WHERE status = 'success'");
         if (result.length === 0 || result[0].values.length === 0) return 0;
         return Number(result[0].values[0][0]) || 0;
     }
 
     // whitelist methods
     async addToWhitelist(pubkey: string, reason?: string) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run('INSERT OR IGNORE INTO whitelist (pubkey, reason) VALUES (?, ?)', [pubkey, reason || null]);
         this.save();
     }
 
     async removeFromWhitelist(pubkey: string) {
-        var db = await this.getDb();
+        const db = await this.getDb();
         db.run('DELETE FROM whitelist WHERE pubkey = ?', [pubkey]);
         this.save();
     }
 
     async isWhitelisted(pubkey: string): Promise<boolean> {
-        var db = await this.getDb();
-        var escapedPubkey = this.escapeString(pubkey);
-        var result = db.exec(`SELECT 1 FROM whitelist WHERE pubkey = '${escapedPubkey}'`);
+        const db = await this.getDb();
+        const escapedPubkey = this.escapeString(pubkey);
+        const result = db.exec(`SELECT 1 FROM whitelist WHERE pubkey = '${escapedPubkey}'`);
         return result.length > 0 && result[0].values.length > 0;
     }
 
     async getWhitelist(): Promise<WhitelistEntry[]> {
-        var db = await this.getDb();
-        var result = db.exec('SELECT * FROM whitelist');
+        const db = await this.getDb();
+        const result = db.exec('SELECT * FROM whitelist');
         if (result.length === 0) return [];
 
         return result[0].values.map(row => {
-            var obj: Record<string, unknown> = {};
+            const obj: Record<string, unknown> = {};
             result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
             return {
                 id: obj.id as number,

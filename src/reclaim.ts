@@ -53,7 +53,7 @@ class ReclaimEngine {
 
     // main reclaim function
     async reclaimAccounts(accounts: AccountStatus[]): Promise<BatchReclaimResult> {
-        var result: BatchReclaimResult = {
+        const result: BatchReclaimResult = {
             successful: [],
             failed: [],
             totalLamportsReclaimed: 0,
@@ -64,35 +64,35 @@ class ReclaimEngine {
             return result;
         }
 
-        var dryRun = configManager.get().dryRun;
-        var treasuryAddr = configManager.get().treasuryAddress;
+        const dryRun = configManager.get().dryRun;
+        const treasuryAddr = configManager.get().treasuryAddress;
 
         if (!treasuryAddr) {
             throw new Error('Treasury address not configured');
         }
 
-        var treasury = new PublicKey(treasuryAddr);
+        const treasury = new PublicKey(treasuryAddr);
         logger.info(`${dryRun ? '[DRY RUN] ' : ''}Processing ${accounts.length} accounts for reclaim`);
 
         // batch em up
-        var batches = this.createBatches(accounts, MAX_INSTRUCTIONS);
+        const batches = this.createBatches(accounts, MAX_INSTRUCTIONS);
         logger.debug(`Created ${batches.length} transaction batches`);
 
         for (let i = 0; i < batches.length; i++) {
-            var batch = batches[i];
+            const batch = batches[i];
             logger.debug(`Processing batch ${i + 1}/${batches.length} (${batch.length} accounts)`);
 
             try {
-                var batchResult = await this.processBatch(batch, treasury, dryRun);
+                const batchResult = await this.processBatch(batch, treasury, dryRun);
                 result.successful.push(...batchResult.successful);
                 result.failed.push(...batchResult.failed);
                 result.totalLamportsReclaimed += batchResult.totalLamportsReclaimed;
             } catch (error) {
-                var errorMsg = error instanceof Error ? error.message : 'Unknown error';
+                const errorMsg = error instanceof Error ? error.message : 'Unknown error';
                 logger.error(`Batch ${i + 1} failed: ${errorMsg}`);
 
                 // mark all as failed
-                for (var account of batch) {
+                for (const account of batch) {
                     result.failed.push({
                         pubkey: account.pubkey,
                         success: false,
@@ -114,19 +114,19 @@ class ReclaimEngine {
 
     // process single batch
     private async processBatch(accounts: AccountStatus[], treasury: PublicKey, dryRun: boolean): Promise<BatchReclaimResult> {
-        var result: BatchReclaimResult = {
+        const result: BatchReclaimResult = {
             successful: [],
             failed: [],
             totalLamportsReclaimed: 0,
         };
 
-        var operator = await this.getOperatorKeypair();
-        var instructions: TransactionInstruction[] = [];
-        var accountsInTx: AccountStatus[] = [];
+        const operator = await this.getOperatorKeypair();
+        const instructions: TransactionInstruction[] = [];
+        const accountsInTx: AccountStatus[] = [];
 
-        for (var account of accounts) {
+        for (const account of accounts) {
             // double check safety
-            var safetyCheck = await safety.checkAccount(account);
+            const safetyCheck = await safety.checkAccount(account);
             if (!safetyCheck.allowed) {
                 result.failed.push({
                     pubkey: account.pubkey,
@@ -139,7 +139,7 @@ class ReclaimEngine {
             }
 
             try {
-                var ix = await this.createCloseInstruction(account, operator.publicKey, treasury);
+                const ix = await this.createCloseInstruction(account, operator.publicKey, treasury);
                 if (ix) {
                     instructions.push(ix);
                     accountsInTx.push(account);
@@ -152,7 +152,7 @@ class ReclaimEngine {
                     });
                 }
             } catch (err) {
-                var errMsg = err instanceof Error ? err.message : 'Unknown error';
+                const errMsg = err instanceof Error ? err.message : 'Unknown error';
                 result.failed.push({
                     pubkey: account.pubkey,
                     success: false,
@@ -166,7 +166,7 @@ class ReclaimEngine {
 
         if (dryRun) {
             // just simulate
-            for (var acc of accountsInTx) {
+            for (const acc of accountsInTx) {
                 logger.success(`[DRY RUN] Would reclaim ${(acc.lamports / 1e9).toFixed(6)} SOL from ${acc.pubkey}`);
                 result.successful.push({
                     pubkey: acc.pubkey,
@@ -180,10 +180,10 @@ class ReclaimEngine {
         }
 
         // actually send it
-        var txResult = await this.executeWithRetry(instructions, operator);
+        const txResult = await this.executeWithRetry(instructions, operator);
 
         if (txResult.success) {
-            for (var acc of accountsInTx) {
+            for (const acc of accountsInTx) {
                 result.successful.push({
                     pubkey: acc.pubkey,
                     success: true,
@@ -204,7 +204,7 @@ class ReclaimEngine {
                 logger.success(`Reclaimed ${(acc.lamports / 1e9).toFixed(6)} SOL from ${acc.pubkey}`);
             }
         } else {
-            for (var acc of accountsInTx) {
+            for (const acc of accountsInTx) {
                 result.failed.push({
                     pubkey: acc.pubkey,
                     success: false,
@@ -234,12 +234,12 @@ class ReclaimEngine {
             return null;
         }
 
-        var accountPubkey = new PublicKey(account.pubkey);
+        const accountPubkey = new PublicKey(account.pubkey);
 
         if (account.isTokenAccount) {
             // token account - check balance first
             try {
-                var tokenAccount = await getAccount(config.connection, accountPubkey);
+                const tokenAccount = await getAccount(config.connection, accountPubkey);
                 if (tokenAccount.amount > 0n) {
                     logger.warn(`Token account ${account.pubkey} has non-zero balance, skipping`);
                     return null;
@@ -267,9 +267,9 @@ class ReclaimEngine {
     private async executeWithRetry(instructions: TransactionInstruction[], signer: Keypair): Promise<{ success: boolean; signature?: string; error?: string }> {
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
-                var tx = new Transaction().add(...instructions);
+                const tx = new Transaction().add(...instructions);
 
-                var signature = await sendAndConfirmTransaction(
+                const signature = await sendAndConfirmTransaction(
                     config.connection,
                     tx,
                     [signer],
@@ -279,11 +279,11 @@ class ReclaimEngine {
                 logger.debug(`Transaction confirmed: ${signature}`);
                 return { success: true, signature };
             } catch (err) {
-                var errMsg = err instanceof Error ? err.message : 'Unknown error';
+                const errMsg = err instanceof Error ? err.message : 'Unknown error';
                 logger.warn(`Attempt ${attempt}/${MAX_RETRIES} failed: ${errMsg}`);
 
                 if (attempt < MAX_RETRIES) {
-                    var delay = RETRY_DELAY * Math.pow(2, attempt - 1);
+                    const delay = RETRY_DELAY * Math.pow(2, attempt - 1);
                     logger.debug(`Retrying in ${delay}ms...`);
                     await this.delay(delay);
                 } else {
@@ -297,7 +297,7 @@ class ReclaimEngine {
 
     // batch helper
     private createBatches(accounts: AccountStatus[], maxPerBatch: number): AccountStatus[][] {
-        var batches: AccountStatus[][] = [];
+        const batches: AccountStatus[][] = [];
         for (let i = 0; i < accounts.length; i += maxPerBatch) {
             batches.push(accounts.slice(i, Math.min(i + maxPerBatch, accounts.length)));
         }
@@ -306,7 +306,7 @@ class ReclaimEngine {
 
     // reclaim just one
     async reclaimSingle(pubkey: string): Promise<ReclaimResult> {
-        var result = await this.reclaimAccounts([{
+        const result = await this.reclaimAccounts([{
             pubkey,
             exists: true,
             lamports: 0,
@@ -325,7 +325,7 @@ class ReclaimEngine {
     }
 
     private logEntry(pubkey: string, status: 'reclaimed' | 'skipped' | 'failed', lamports: number, reason?: string, txSig?: string) {
-        var entry: ReclaimLogEntry = {
+        const entry: ReclaimLogEntry = {
             pubkey,
             status,
             lamports,

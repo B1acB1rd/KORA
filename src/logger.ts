@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import { config } from './config';
+import { paths } from './paths';
 
 export type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'debug';
 
@@ -31,7 +32,8 @@ class Logger {
     private verbose = false;  // default off
 
     constructor() {
-        this.logsDir = path.join(process.cwd(), 'logs');
+        // Use user data directory for logs in standalone binary mode
+        this.logsDir = paths.logsDir;
         this.ensureLogsDir();
     }
 
@@ -46,9 +48,9 @@ class Logger {
     }
 
     log(level: LogLevel, message: string, data?: unknown) {
-        var timestamp = new Date().toISOString();
-        var prefix: string;
-        var colorFn: (text: string) => string;
+        const timestamp = new Date().toISOString();
+        let prefix: string;
+        let colorFn: (text: string) => string;
 
         // pick color and prefix based on level
         switch (level) {
@@ -102,7 +104,7 @@ class Logger {
     }
 
     printSummary(summary: ScanSummary) {
-        var solReclaimed = summary.totalLamportsReclaimed / 1e9;
+        const solReclaimed = summary.totalLamportsReclaimed / 1e9;
 
         console.log('\n' + chalk.bold.cyan('='.repeat(50)));
         console.log(chalk.bold.cyan('  Scan Summary'));
@@ -116,17 +118,17 @@ class Logger {
     }
 
     async saveJsonLog(summary: ScanSummary): Promise<string> {
-        var date = new Date().toISOString().split('T')[0];
-        var filename = `reclaim-${date}.json`;
-        var filepath = path.join(this.logsDir, filename);
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `reclaim-${date}.json`;
+        const filepath = path.join(this.logsDir, filename);
 
-        var logData = {
+        const logData = {
             summary,
             entries: this.logEntries,
         };
 
         // load existing if there
-        var existingData: { summary: ScanSummary; entries: ReclaimLogEntry[] }[] = [];
+        let existingData: { summary: ScanSummary; entries: ReclaimLogEntry[] }[] = [];
         if (fs.existsSync(filepath)) {
             try {
                 existingData = JSON.parse(fs.readFileSync(filepath, 'utf-8'));
@@ -142,16 +144,16 @@ class Logger {
     }
 
     async saveCsvLog(): Promise<string> {
-        var date = new Date().toISOString().split('T')[0];
-        var filename = `reclaim-${date}.csv`;
-        var filepath = path.join(this.logsDir, filename);
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `reclaim-${date}.csv`;
+        const filepath = path.join(this.logsDir, filename);
 
-        var headers = 'pubkey,status,lamports,reason,txSignature,timestamp\n';
-        var rows = this.logEntries.map(e =>
+        const headers = 'pubkey,status,lamports,reason,txSignature,timestamp\n';
+        const rows = this.logEntries.map(e =>
             `${e.pubkey},${e.status},${e.lamports || ''},${e.reason || ''},${e.txSignature || ''},${e.timestamp}`
         ).join('\n');
 
-        var csvContent = headers + rows;
+        const csvContent = headers + rows;
 
         // append or write new
         if (fs.existsSync(filepath)) {

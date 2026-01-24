@@ -12,7 +12,7 @@ class AlertManager {
 
     constructor() {
         // setup telegram if both token and chat id are there
-        var cfg = config;
+        const cfg = config;
         if (cfg.telegramBotToken && cfg.telegramChatId) {
             this.telegramConfig = {
                 botToken: cfg.telegramBotToken,
@@ -32,17 +32,17 @@ class AlertManager {
             return false;
         }
 
-        var { botToken, chatId } = this.telegramConfig;
-        var url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+        const { botToken, chatId } = this.telegramConfig;
+        const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-        var data = JSON.stringify({
+        const data = JSON.stringify({
             chat_id: chatId,
             text: message,
             parse_mode: 'HTML',
         });
 
         return new Promise((resolve) => {
-            var req = https.request(url, {
+            const req = https.request(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -72,8 +72,8 @@ class AlertManager {
     async sendReclaimSummary(total: number, reclaimed: number, failed: number, lamportsReclaimed: number) {
         if (!this.isConfigured()) return;
 
-        var solReclaimed = (lamportsReclaimed / 1e9).toFixed(4);
-        var msg = `
+        const solReclaimed = (lamportsReclaimed / 1e9).toFixed(4);
+        const msg = `
 <b>Kora Rent Reclaimer Report</b>
 
 <b>Summary</b>
@@ -93,11 +93,11 @@ Time: ${new Date().toISOString()}
     async sendLargeReclaimAlert(pubkey: string, lamports: number) {
         if (!this.isConfigured()) return;
 
-        var threshold = config.alertThresholdSol * 1e9;
+        const threshold = config.alertThresholdSol * 1e9;
         if (lamports < threshold) return;
 
-        var sol = (lamports / 1e9).toFixed(4);
-        var msg = `
+        const sol = (lamports / 1e9).toFixed(4);
+        const msg = `
 <b>Large Reclaim Alert</b>
 
 Amount: ${sol} SOL
@@ -112,7 +112,7 @@ Network: ${config.network}
     async sendErrorAlert(error: string, context?: string) {
         if (!this.isConfigured()) return;
 
-        var msg = `
+        const msg = `
 <b>Kora Reclaimer Error</b>
 
 ${context ? `Context: ${context}\n` : ''}Error: ${error}
@@ -127,7 +127,7 @@ Time: ${new Date().toISOString()}
     async sendStartupAlert() {
         if (!this.isConfigured()) return;
 
-        var msg = `
+        const msg = `
 <b>Kora Rent Reclaimer Started</b>
 
 Network: ${config.network}
