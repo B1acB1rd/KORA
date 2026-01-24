@@ -2,8 +2,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 import { Keypair, Connection, clusterApiUrl, Cluster, PublicKey } from '@solana/web3.js';
+import { paths } from './paths';
 
-dotenv.config();
+// Load .env from user data directory if it exists, otherwise from CWD
+const envPath = fs.existsSync(paths.envPath) ? paths.envPath : '.env';
+dotenv.config({ path: envPath });
 
 export interface Config {
     // network stuff
@@ -65,7 +68,7 @@ class ConfigManager {
             telegramChatId: process.env.TELEGRAM_CHAT_ID,
             alertThresholdSol: parseFloat(process.env.ALERT_THRESHOLD_SOL || '1.0'),
 
-            databasePath: process.env.DATABASE_PATH || './database/accounts.db',
+            databasePath: process.env.DATABASE_PATH || paths.defaultDatabasePath,
 
             dryRun: false,
             verbose: false,
@@ -75,15 +78,20 @@ class ConfigManager {
     }
 
     private loadWhitelist() {
-        var whitelistPath = path.join(process.cwd(), 'whitelist.json');
-        if (fs.existsSync(whitelistPath)) {
-            try {
-                var data = JSON.parse(fs.readFileSync(whitelistPath, 'utf-8'));
-                if (Array.isArray(data)) {
-                    data.forEach((addr: string) => this.whitelist.add(addr));
+        // Try user data directory first, then CWD for backwards compatibility
+        const whitelistPaths = [paths.whitelistPath, path.join(process.cwd(), 'whitelist.json')];
+
+        for (const whitelistPath of whitelistPaths) {
+            if (fs.existsSync(whitelistPath)) {
+                try {
+                    var data = JSON.parse(fs.readFileSync(whitelistPath, 'utf-8'));
+                    if (Array.isArray(data)) {
+                        data.forEach((addr: string) => this.whitelist.add(addr));
+                    }
+                    return; // Found and loaded, stop looking
+                } catch (err) {
+                    console.warn(`Warning: Failed to load ${whitelistPath}`);
                 }
-            } catch (err) {
-                console.warn('Warning: Failed to load whitelist.json');
             }
         }
     }
@@ -144,8 +152,8 @@ class ConfigManager {
     }
 
     private saveWhitelist() {
-        var whitelistPath = path.join(process.cwd(), 'whitelist.json');
-        fs.writeFileSync(whitelistPath, JSON.stringify(Array.from(this.whitelist), null, 2));
+        // Always save to user data directory for standalone binary compatibility
+        fs.writeFileSync(paths.whitelistPath, JSON.stringify(Array.from(this.whitelist), null, 2));
     }
 
     validate(): { valid: boolean; errors: string[] } {

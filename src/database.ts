@@ -45,7 +45,28 @@ class DatabaseManager {
 
     private async getDb(): Promise<SqlJsDatabase> {
         if (!this.db) {
-            var SQL = await initSqlJs();
+            // Try to locate WASM file for sql.js
+            // This handles both normal Node.js execution and pkg-bundled binary
+            let wasmPath: string | undefined;
+
+            // Common locations to check for the WASM file
+            const possiblePaths = [
+                // In node_modules (normal development)
+                path.join(__dirname, '../node_modules/sql.js/dist/sql-wasm.wasm'),
+                path.join(process.cwd(), 'node_modules/sql.js/dist/sql-wasm.wasm'),
+                // pkg snapshot filesystem
+                path.join(path.dirname(process.execPath), 'sql-wasm.wasm'),
+            ];
+
+            for (const p of possiblePaths) {
+                if (fs.existsSync(p)) {
+                    wasmPath = p;
+                    break;
+                }
+            }
+
+            // Initialize sql.js - it will use built-in WASM if path not found
+            var SQL = await initSqlJs(wasmPath ? { locateFile: () => wasmPath! } : undefined);
             var dbDir = path.dirname(this.dbPath);
 
             if (!fs.existsSync(dbDir)) {

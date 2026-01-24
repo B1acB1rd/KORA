@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 import { config } from './config';
+import { paths } from './paths';
 
 export type LogLevel = 'info' | 'success' | 'warn' | 'error' | 'debug';
 
@@ -31,7 +32,8 @@ class Logger {
     private verbose = false;  // default off
 
     constructor() {
-        this.logsDir = path.join(process.cwd(), 'logs');
+        // Use user data directory for logs in standalone binary mode
+        this.logsDir = paths.logsDir;
         this.ensureLogsDir();
     }
 

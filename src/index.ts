@@ -46,7 +46,7 @@ program
 
         // filter out accounts that dont pass safety
         const { safe, filtered } = await safety.filterSafeAccounts(result.reclaimable);
- 
+
         logger.info(`Found ${safe.length} accounts eligible for reclaim`);
 
         if (filtered.length > 0) {
@@ -334,4 +334,30 @@ async function confirmMainnetOperation(): Promise<boolean> {
     });
 }
 
-program.parse();
+// Wait for key press before exiting (useful when double-clicking the exe)
+async function waitForKeyPress(): Promise<void> {
+    console.log('\nPress Enter to exit...');
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+    return new Promise((resolve) => {
+        rl.question('', () => {
+            rl.close();
+            resolve();
+        });
+    });
+}
+
+// Check if running interactively (no command provided)
+async function main() {
+    // If no arguments beyond node and script, show help and wait
+    if (process.argv.length <= 2) {
+        program.outputHelp();
+        await waitForKeyPress();
+        process.exit(0);
+    }
+    program.parse();
+}
+
+main();

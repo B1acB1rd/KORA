@@ -159,18 +159,65 @@ This bot automatically manages rent recovery for Kora-sponsored accounts:
 
 ## Getting Started
 
-### Requirements
+### Option 1: Download Standalone Binary (Recommended)
 
-- Node.js 20+
+Download the pre-built binary for your platform from the [Releases](https://github.com/B1acB1rd/KORA/releases) page:
+
+| Platform | File |
+|----------|------|
+| Windows | `kora-reclaimer.exe` |
+| Linux | `kora-reclaimer-linux` |
+| macOS | `kora-reclaimer-macos` |
+
+**No Node.js required!** Just download, configure, and run.
+
+#### Quick Start with Binary
+
+```bash
+# Windows (PowerShell)
+.\kora-reclaimer.exe --help
+.\kora-reclaimer.exe status
+.\kora-reclaimer.exe scan -n devnet
+
+# Linux/macOS
+chmod +x kora-reclaimer-linux  # Make executable (first time only)
+./kora-reclaimer-linux --help
+./kora-reclaimer-linux status
+./kora-reclaimer-linux scan -n devnet
+```
+
+#### Data Directory
+
+The CLI stores its data (database, logs, whitelist) in:
+- **Windows:** `%APPDATA%\kora-reclaimer\`
+- **Linux/macOS:** `~/.kora-reclaimer/`
+
+---
+
+### Option 2: Build from Source
+
+#### Requirements
+
+- Node.js 18+
 - A Solana wallet (the operator keypair)
 - Some devnet SOL for testing
 
-### Install
+#### Install
 
 ```bash
 npm install
 npm run build
 ```
+
+#### Build Standalone Binaries
+
+```bash
+npm run build:windows  # Creates bin/kora-reclaimer.exe
+npm run build:linux    # Creates bin/kora-reclaimer-linux
+npm run build:macos    # Creates bin/kora-reclaimer-macos
+npm run build:all      # All platforms
+```
+
 
 ### Configure
 
