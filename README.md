@@ -157,6 +157,19 @@ This bot automatically manages rent recovery for Kora-sponsored accounts:
 
 ---
 
+## Quick Start & Verification
+
+**For Judges & Evaluators:** The fastest way to verify this bot works is using the `dev` script with the pre-configured details.
+
+1.  **Install**: `npm install`
+2.  **Build**: `npm run build`
+3.  **Run Dry-Run**: `npm start -- reclaim --dry-run -n devnet`
+    *   *This will simulate the process using the configured test wallet and show you exactly what would happen without spending real SOL.*
+4.  **Run Scan**: `npm start -- scan -n devnet -v`
+    *   *This will show you the account scanning process in verbose mode.*
+
+---
+
 ## Getting Started
 
 ### Option 1: Download Standalone Binary (Recommended)
