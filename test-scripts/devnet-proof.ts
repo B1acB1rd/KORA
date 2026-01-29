@@ -41,8 +41,13 @@ interface ProofResult {
 async function getOrCreateWallet(filePath: string, connection: Connection): Promise<Keypair> {
     if (fs.existsSync(filePath)) {
         console.log(`Loading existing wallet from ${filePath}`);
-        const secret = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        return Keypair.fromSecretKey(new Uint8Array(secret));
+        try {
+            const secret = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+            return Keypair.fromSecretKey(new Uint8Array(secret));
+        } catch (err) {
+            console.warn(`Warning: Failed to load wallet at ${filePath}: ${err}. Will generate a new test wallet instead.`);
+            // fall through to generate a new wallet
+        }
     }
 
     console.log('Generating new test wallet...');
@@ -133,8 +138,27 @@ async function main() {
     console.log();
 
     const connection = new Connection(DEVNET_RPC, 'confirmed');
-    const projectRoot = path.join(__dirname, '..');
-    const walletPath = path.join(projectRoot, 'devnet-test-wallet.json');
+    // Use process.cwd() so this script can run with node/ts-node without relying on __dirname
+    const projectRoot = process.cwd();
+    // Prefer an existing devnet operator keypair if present and valid (so we use a funded wallet).
+    // If the existing operator file is invalid, do NOT overwrite it; instead use a dedicated test wallet.
+    const defaultOperatorPath = path.join(projectRoot, 'devnet-operator.json');
+    const fallbackTestPath = path.join(projectRoot, 'devnet-test-wallet.json');
+    let walletPath: string;
+
+    if (fs.existsSync(defaultOperatorPath)) {
+        try {
+            const secret = JSON.parse(fs.readFileSync(defaultOperatorPath, 'utf-8'));
+            // attempt to construct keypair to validate
+            require('@solana/web3.js').Keypair.fromSecretKey(new Uint8Array(secret));
+            walletPath = defaultOperatorPath;
+        } catch (err) {
+            console.warn(`Existing ${defaultOperatorPath} is invalid; using ${fallbackTestPath} for test wallet.`);
+            walletPath = fallbackTestPath;
+        }
+    } else {
+        walletPath = fallbackTestPath;
+    }
     const testAccountsPath = path.join(projectRoot, 'test-accounts.json');
 
     // 1. Get or create operator wallet

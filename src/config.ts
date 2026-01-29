@@ -4,9 +4,20 @@ import fs from 'fs';
 import { Keypair, Connection, clusterApiUrl, Cluster, PublicKey } from '@solana/web3.js';
 import { paths } from './paths';
 
-// Load .env from user data directory if it exists, otherwise from CWD
-const envPath = fs.existsSync(paths.envPath) ? paths.envPath : '.env';
-dotenv.config({ path: envPath });
+// Prefer loading .env from the current working directory for easier local testing.
+// Fall back to the user data directory env if no local .env exists.
+let envPath: string | undefined;
+if (fs.existsSync('.env')) {
+    envPath = '.env';
+} else if (fs.existsSync(paths.envPath)) {
+    envPath = paths.envPath;
+}
+
+if (envPath) {
+    dotenv.config({ path: envPath });
+} else {
+    dotenv.config();
+}
 
 export interface Config {
     // network stuff

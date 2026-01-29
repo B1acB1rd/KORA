@@ -194,22 +194,29 @@ The CLI stores its data (database, logs, whitelist) in:
 
 ---
 
-### Option 2: Build from Source
+### Option 2: Build from Source (Recommended for Testing)
+
+This is the best way to test and develop.
 
 #### Requirements
 
 - Node.js 18+
-- A Solana wallet (the operator keypair)
-- Some devnet SOL for testing
+- npm (comes with Node.js)
+- A Solana operator keypair (JSON format)
+- Some devnet SOL for transaction fees
 
-#### Install
+#### Install & Build
 
 ```bash
+git clone <repo-url>
+cd kora-rent-reclaimer
 npm install
 npm run build
 ```
 
-#### Build Standalone Binaries
+#### Build Standalone Binaries (Optional)
+
+You can package the bot as a standalone executable for distribution:
 
 ```bash
 npm run build:windows  # Creates bin/kora-reclaimer.exe
@@ -218,48 +225,153 @@ npm run build:macos    # Creates bin/kora-reclaimer-macos
 npm run build:all      # All platforms
 ```
 
+Then run the binary directly:
+```bash
+./bin/kora-reclaimer-linux scan -n devnet  # Linux/macOS
+.\bin\kora-reclaimer.exe scan -n devnet     # Windows
+```
 
-### Configure
 
-Copy `.env.example` to `.env` and fill in:
+### Configure Environment
+
+A `.env` file already exists in the repo configured for Devnet testing. You may customize it:
 
 ```env
-# Which network
+# RPC Configuration
 RPC_URL=https://api.devnet.solana.com
 NETWORK=devnet
 
 # Your operator wallet (the one that sponsors txs)
+# This should point to a keypair JSON file you own
 WALLET_PATH=./devnet-operator.json
 
-# Where reclaimed SOL goes
-TREASURY_ADDRESS=<your-treasury-pubkey>
+# Where reclaimed SOL goes (should be your operator address)
+TREASURY_ADDRESS=<your-operator-pubkey>
 
 # Safety settings
-MIN_IDLE_DAYS=7
+MIN_IDLE_DAYS=0  # Use 0 for testing; use 7+ for production
 MAX_RECLAIM_SOL_PER_RUN=10
 
 # Optional: Telegram alerts
-# TELEGRAM_BOT_TOKEN=xxx
-# TELEGRAM_CHAT_ID=xxx
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+ALERT_THRESHOLD_SOL=1.0
 ```
 
-### Basic Usage
+**Important:** Replace `WALLET_PATH` and `TREASURY_ADDRESS` with your actual operator keypair and address.
+
+### Quick Start (Tested Workflow)
+
+Follow these exact steps to test the bot on Devnet:
+
+#### Step 1: Install Dependencies
 
 ```bash
-# 1. Import or discover sponsored accounts
+npm install
+```
+
+#### Step 2: Build the Project
+
+```bash
+npm run build
+```
+
+#### Step 3: Generate Test Accounts (Optional, for demo)
+
+If you want to test with fresh token accounts on Devnet:
+
+```bash
+npx ts-node test-scripts/devnet-proof.ts
+```
+
+This script will:
+- Create 2 test token accounts on Devnet
+- Set your operator as the `closeAuthority` (so you can reclaim)
+- Save account metadata to `test-accounts.json`
+- Update `.env` with the test wallet address and treasury
+
+#### Step 4: Import Accounts
+
+Import test accounts (or your own from a JSON file):
+
+```bash
+node dist/index.js import test-accounts.json -n devnet
+```
+
+#### Step 5: Scan for Reclaimable Accounts
+
+Scan your tracked accounts to identify which ones you can reclaim:
+
+```bash
+node dist/index.js scan -n devnet -v
+```
+
+Expected output:
+- List of reclaimable accounts
+- Authority verification (operator must be `closeAuthority`)
+- Amount of SOL locked in each account
+
+#### Step 6: Dry-Run Reclaim (Recommended)
+
+Simulate the reclaim without actually sending transactions:
+
+```bash
+node dist/index.js reclaim --dry-run -n devnet -v
+```
+
+This shows what accounts would be closed and how much SOL would be recovered.
+
+#### Step 7: Execute Reclaim
+
+Once satisfied with the dry-run output, execute the actual reclaim:
+
+```bash
+node dist/index.js reclaim -n devnet -v
+```
+
+The bot will:
+- Create close account transactions
+- Sign them with your operator keypair
+- Send them to Devnet
+- Return rent SOL to your treasury address
+
+#### Step 8: Check Status
+
+View reclaim history and account statistics:
+
+```bash
+node dist/index.js status -n devnet
+```
+
+View JSON logs:
+
+```bash
+ls %APPDATA%\kora-reclaimer\logs\  # Windows
+ls ~/.kora-reclaimer/logs/           # Linux/macOS
+```
+
+### Using Your Own Accounts
+
+Instead of the test script, you can import real sponsored accounts:
+
+```bash
+# Discover accounts from your fee payer address
 node dist/index.js discover <your-fee-payer-address> --limit 1000 -n devnet
 
-# 2. Scan to see whats reclaimable (safe, read-only)
-node dist/index.js scan -n devnet
+# Or import from a JSON file
+node dist/index.js import your-accounts.json -n devnet
+```
 
-# 3. Dry run the reclaim (simulates but doesnt execute)
-node dist/index.js reclaim --dry-run -n devnet
-
-# 4. Actually reclaim
-node dist/index.js reclaim -n devnet
-
-# 5. Check status
-node dist/index.js status
+JSON format:
+```json
+[
+  {
+    "pubkey": "8NsGv6qS7VPU9bVxLwWvBHuBfaXJKqLN8FnLHHFNDYXh"
+  },
+  {
+    "pubkey": "5JvHtHVfEZLZKQxm3zWGaRMHJNt3WqRZ8KNDT7y4xKPU"
+  }
+]
 ```
 
 ---
@@ -389,23 +501,107 @@ If you configure the bot token and chat ID, youll get:
 
 ---
 
-## Testing on Devnet
+## Troubleshooting
 
+### Issue: "Could not load operator keypair"
+
+**Cause:** `WALLET_PATH` in `.env` doesn't exist or is invalid.
+
+**Fix:**
+1. Ensure `WALLET_PATH` points to a valid keypair JSON file
+2. The keypair should be a 64-byte array: `[29, 234, 249, ...]`
+3. Example:
+   ```json
+   [29, 234, 249, 202, 206, 179, 254, 234, ...]
+   ```
+
+### Issue: "No accounts found to reclaim"
+
+**Cause:** Accounts don't have operator as `closeAuthority` or fail safety checks.
+
+**Fix:**
+1. Run `scan -v` to see why accounts are skipped
+2. Check that `WALLET_PATH` matches the operator who created the accounts
+3. Ensure `MIN_IDLE_DAYS` is set appropriately (use 0 for fresh test accounts)
+4. Review whitelist with `whitelist list`
+
+### Issue: "Insufficient SOL for fees"
+
+**Cause:** Operator wallet doesn't have enough SOL for transaction fees.
+
+**Fix:**
+1. Get devnet SOL:
+   ```bash
+   solana airdrop 2 <your-operator-pubkey> --url devnet
+   ```
+2. Or request funds from the Solana Devnet Faucet: https://faucet.solana.com/
+
+### Issue: "sql.js: Failed to load bindings"
+
+**Cause:** Native SQLite bindings not available (harmless warning).
+
+**Fix:** This is not an error — the bot falls back to pure JavaScript SQLite. If you want native bindings:
 ```bash
-# Get some devnet SOL
-solana airdrop 2 --url devnet
+npm run rebuild
+```
 
-# Discover accounts from your fee payer
-node dist/index.js discover <fee-payer> --limit 100 -n devnet
+### Issue: Commands not working in PowerShell
 
-# Dry run first
-node dist/index.js reclaim --dry-run -v -n devnet
+**Cause:** Path or quoting issues on Windows.
 
-# If it looks good, do it
-node dist/index.js reclaim -n devnet
+**Fix:** Use full paths and proper quoting:
+```powershell
+node dist/index.js scan -n devnet -v
+node dist/index.js reclaim --dry-run -n devnet
+```
 
-# Check what happened  
-node dist/index.js status
+---
+
+## Prerequisites for Testing
+
+Before you start, ensure you have:
+
+- **Node.js 18+** installed
+  ```bash
+  node --version  # Should be v18.0.0 or higher
+  ```
+- **npm** installed
+  ```bash
+  npm --version
+  ```
+- **A Solana operator keypair** (JSON format)
+  - Generate one: `solana-keygen new`
+  - Or use an existing keypair
+- **Devnet SOL** in your operator wallet
+  - Request airdrop: `solana airdrop 2 <pubkey> --url devnet`
+  - Or use the test script (includes airdrop logic)
+- **Internet connection** to reach Solana Devnet RPC
+
+---
+
+## Production Readiness
+
+Before running on **Mainnet**:
+
+1. **Test thoroughly on Devnet** with real sponsored accounts
+2. **Set `MIN_IDLE_DAYS`** to a safe value (7+ days recommended)
+3. **Use a whitelisted address** for treasury to prevent accidents
+4. **Enable Telegram alerts** to be notified of large reclaims
+5. **Review all logs** and dry-run output before executing
+6. **Monitor transaction signatures** to confirm on Solana Explorer
+7. **Keep backups** of your database (`database/accounts.db`)
+
+Example production `.env`:
+
+```env
+RPC_URL=https://api.mainnet-beta.solana.com
+NETWORK=mainnet-beta
+WALLET_PATH=/path/to/your/mainnet-operator.json
+TREASURY_ADDRESS=<your-mainnet-treasury>
+MIN_IDLE_DAYS=30
+MAX_RECLAIM_SOL_PER_RUN=5
+TELEGRAM_BOT_TOKEN=<your-bot-token>
+TELEGRAM_CHAT_ID=<your-chat-id>
 ```
 
 ---
@@ -474,10 +670,20 @@ src/
 
 ---
 
+## Support & Feedback
+
+For issues, questions, or improvements:
+- Check the **Troubleshooting** section above
+- Review **logs** in `%APPDATA%\kora-reclaimer\logs\` (Windows) or `~/.kora-reclaimer/logs/` (Linux/macOS)
+- Ensure `.env` is correctly configured
+- Run with `-v` flag for verbose output
+
+---
+
 ## License
 
 MIT
 
 ---
 
-Tested on devnet, use on mainnet at your own risk.
+**Tested on Devnet with real Solana RPC. Use on Mainnet at your own risk.**

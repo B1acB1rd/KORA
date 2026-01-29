@@ -209,6 +209,7 @@ class Scanner {
                     : new PublicKey(decoded.owner).toBase58(); // default to owner if no closeAuthority set
 
                 status.closeAuthority = closeAuthority;
+                logger.debug(`Account ${pubkey} closeAuthority=${closeAuthority} operator=${operatorPubkey?.toBase58()}`);
 
                 // check if operator is the close authority
                 if (operatorPubkey && closeAuthority === operatorPubkey.toBase58()) {
